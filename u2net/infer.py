@@ -177,3 +177,51 @@ def decontaminate_colors(image: Image.Image, mask: Image.Image, strength: float 
     hsv2 = cv2.merge([H, S, V]).astype(np.uint8)
     out_rgb = cv2.cvtColor(hsv2, cv2.COLOR_HSV2RGB)
     return Image.fromarray(out_rgb)
+
+
+def refine_with_grabcut(orig: Image.Image, init_mask: Image.Image,
+                        fg_strokes: np.ndarray, bg_strokes: np.ndarray,
+                        iterations: int = 5, feather: int = 6,
+                        gentle: bool = False) -> Image.Image:
+    """Run GrabCut refinement using initial mask and user strokes.
+    fg_strokes, bg_strokes are uint8 arrays (H,W) in {0,1} indicating user marks.
+    Returns refined binary mask as PIL.L
+    """
+    img = np.array(orig.convert('RGB'))
+    h, w = img.shape[:2]
+    init = np.array(init_mask.convert('L').resize((w, h), Image.BILINEAR))
+
+    # Initialize grabcut mask categories
+    gc_mask = np.full((h, w), cv2.GC_PR_FGD, dtype=np.uint8)  # probable FG
+    gc_mask[init < 20] = cv2.GC_BGD
+    gc_mask[init > 220] = cv2.GC_FGD
+
+    # sanitize strokes to 2D uint8 aligned to (h,w)
+    def _prep(m):
+        if m is None:
+            return None
+        m = np.asarray(m)
+        if m.ndim == 3:
+            m = m[..., 0]
+        if m.shape != (h, w):
+            m = cv2.resize(m.astype(np.uint8), (w, h), interpolation=cv2.INTER_NEAREST)
+        return (m > 0).astype(np.uint8)
+
+    fg = _prep(fg_strokes)
+    bg = _prep(bg_strokes)
+    if fg is not None:
+        gc_mask[fg.astype(bool)] = (cv2.GC_PR_FGD if gentle else cv2.GC_FGD)
+    if bg is not None:
+        gc_mask[bg.astype(bool)] = (cv2.GC_PR_BGD if gentle else cv2.GC_BGD)
+
+    bgdModel = np.zeros((1, 65), np.float64)
+    fgdModel = np.zeros((1, 65), np.float64)
+    iters = max(1, int(iterations))
+    if gentle:
+        iters = min(iters, 3)
+    cv2.grabCut(img, gc_mask, None, bgdModel, fgdModel, iters, cv2.GC_INIT_WITH_MASK)
+
+    out = np.where((gc_mask == cv2.GC_FGD) | (gc_mask == cv2.GC_PR_FGD), 255, 0).astype(np.uint8)
+    if feather > 0:
+        out = cv2.GaussianBlur(out, (0, 0), sigmaX=feather, sigmaY=feather)
+    return Image.fromarray(out, mode='L')
