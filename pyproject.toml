@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clearcut-bg-remover"
+version = "0.1.0"
+description = "Lokale Desktop-App zur Entfernung von Bildhintergründen mit U²-Net (PyQt6 GUI)"
+readme = "README.md"
+authors = [{ name = "Your Name" }]
+license = { text = "MIT" }
+requires-python = ">=3.9"
+dependencies = [
+  "PyQt6>=6.5",
+  "Pillow>=10.0",
+  "numpy>=1.24",
+  "torch>=2.0; platform_system != 'Darwin' or platform_machine != 'arm64'",
+  "torchvision>=0.15; platform_system != 'Darwin' or platform_machine != 'arm64'",
+  "requests>=2.31",
+  "tqdm>=4.66",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourname/clearcut"
+Repository = "https://github.com/yourname/clearcut"
+
+[tool.setuptools]
+packages = ["u2net"]
